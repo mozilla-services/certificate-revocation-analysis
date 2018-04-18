@@ -3,9 +3,10 @@ import OpenSSL
 import json
 import os
 
+from settings import ALL_CRLS_DIR, COMBINED_CRL_OUTFILE
+
 WORKERS = 4
-outfile = 'megaCRL'
-inpath = 'raw_CRLs/'
+
 
 def open_crl(rawtext):
     try:
@@ -17,20 +18,21 @@ def open_crl(rawtext):
     except:
         return False
 
+
 def mp_worker(crl_path):
     revoked_data = {}
     revoked_data['path'] = crl_path
     revoked_data['cert_serials'] = []
     revoked_data['crl_issuer'] = []
-    try :
-        infile = open(crl_path, 'rb') # read as binary
+    try:
+        infile = open(crl_path, 'rb')  # read as binary
         rawtext = infile.read()
         infile.close()
     except:
         print("could not open " + crl_path)
         return json.dumps(revoked_data)
     crl = open_crl(rawtext)
-    if crl == False: # if reading failed
+    if crl is False:  # if reading failed
         print("could not open " + crl_path)
         return json.dumps(revoked_data)
     revoked_data['crl_issuer'] = crl.get_issuer().get_components()
@@ -42,6 +44,7 @@ def mp_worker(crl_path):
         revoked_data['cert_serials'].append(serial)
     return json.dumps(revoked_data, cls=ExtendedJSONEncoder)
 
+
 class ExtendedJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, bytes):
@@ -49,17 +52,19 @@ class ExtendedJSONEncoder(json.JSONEncoder):
         else:
             return super().default(o)
 
+
 def mp_handler():
     print('searching for crls')
     p = multiprocessing.Pool(WORKERS)
     crl_paths = []
-    for path, dirs, files in os.walk(inpath):
+    for path, dirs, files in os.walk(ALL_CRLS_DIR):
         for filename in files:
             crl_paths.append(os.path.join(path, filename))
     print('reading files')
-    with open(outfile, 'w') as f:
+    with open(COMBINED_CRL_OUTFILE, 'w') as f:
         for result in p.imap(mp_worker, crl_paths):
             f.write(result + '\n')
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     mp_handler()

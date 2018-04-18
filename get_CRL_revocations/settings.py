@@ -1,0 +1,7 @@
+CT_FETCH_DATA_DIR = '/Users/lcrouch/code/mozilla/ct-mapreduce/ct'
+CRL_SERVERS_FILENAME = 'CRL_servers'
+CERTS_OUTFILE = 'certs_using_crl.json'
+ALL_CRLS_DIR = 'all_CRLs'
+COMBINED_CRL_OUTFILE = 'megaCRL'
+REVOKED_CERTS_DIR = 'revokedCRLCerts'
+REVOKED_CERTS_FILENAME_PREFIX = 'certs'
