@@ -17,16 +17,26 @@ to fetch all certificates from CT logs.
 
 ### Part B: Determining CRL Revocations
 1. `pip install -r requirements.txt`
-1. `cd get_CRL_revocations`
-2. Edit `settings.py` `CT_FETCH_DATA_DIR` to point to the directory where you
+2. `cd get_CRL_revocations`
+3. Edit `settings.py` `CT_FETCH_DATA_DIR` to point to the directory where you
    fetched the CT data in Part A.
-3. `python extract_crls.py` This script will output 2 files:
-   * `certs_using_crl.json` - all certificates which have listed CRLs
-   * `CRL_servers` - all CRL distribution points
-4. `aria2c -d all_CRLs -i CRL_servers -j 16`.
-5. `python build_megaCRL.py`
-6. `python build_CRL_revoked.py`.
-7. `cat revokedCRLCerts/certs* > ../final_CRL_revoked.json`
+
+The data pipeline for transforming CT log data into 2 final sets of "revoked"
+and "non-revoked" certs is broken up into a number of processes. Each step
+below creates an output that feeds into the next step.
+
+4. `python extract_crls.py` loops over the `ct-fetch` data and outputs 2 files:
+   * `certs_using_CRL.json` - all certificates which have listed CRLs
+   * `CRL_servers.txt` - all CRL distribution points
+5. `aria2c -d all_CRLs -i CRL_servers.txt -j 16` downloads all CRLs from 
+   `CRL_servers.txt` into the
+   * `all_CRLs/` directory
+6. `python build_megaCRL.py` combines all the CRLs in `all_CRLs/` into a
+   single:
+   * `megaCRL.json`
+7. `python build_CRL_revoked.py` parses `certs_using_crl.json` and puts any
+   cert found in `megaCRL.json` into
+   * `final_CRL_revoked.json` file
 
 ### Part C: Building The Filter
 See https://github.com/mozilla-services/shavar-list-creation/pull/53

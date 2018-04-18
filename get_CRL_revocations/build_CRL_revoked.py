@@ -1,39 +1,11 @@
-import os
-from multiprocessing import Process, Queue
+
 import json
-import sys
 
 from settings import (
-    CERTS_OUTFILE, COMBINED_CRL_OUTFILE,
-    REVOKED_CERTS_DIR, REVOKED_CERTS_FILENAME_PREFIX
+    CERTS_OUTFILE, COMBINED_CRL_OUTFILE, FINAL_REVOKED_CERTS_FILE
 )
 
-WORKERS = 16
-OUTFILE = '%s/%s' % (REVOKED_CERTS_DIR, REVOKED_CERTS_FILENAME_PREFIX)
-
-
-def doWork(i, megaCRL_org, megaCRL_CN):
-    print('starting worker ' + str(i))
-    with open(OUTFILE + str(i), 'w') as out:
-        while True:
-            try:
-                cert_task = q.get()
-                cert = json.loads(cert_task)
-                serial = int(cert['serial_number'])
-                issuer = cert['issuer']
-            except:
-                print("Error parsing/loading %s" % cert_task)
-                continue  # skip to next certificate
-            try:
-                org = issuer['organization']
-            except:
-                org = 'unknown'
-            try:
-                CN = issuer['common_name']
-            except:
-                CN = 'unknown'
-            if(isRevoked(megaCRL_org, megaCRL_CN, org, CN, serial)):
-                out.write(json.dumps(cert) + '\n')
+final_revoked_certs_file = open(FINAL_REVOKED_CERTS_FILE, 'w')
 
 
 def isRevoked(megaCRL_org, megaCRL_CN, org, CN, serial):
@@ -71,21 +43,27 @@ def buildDict():
 
 if __name__ == '__main__':
     print('Using %s and %s to create %s...' % (
-        CERTS_OUTFILE, COMBINED_CRL_OUTFILE, REVOKED_CERTS_DIR
+        CERTS_OUTFILE, COMBINED_CRL_OUTFILE, FINAL_REVOKED_CERTS_FILE
     ))
-    if not os.path.exists(REVOKED_CERTS_DIR):
-        os.makedirs(REVOKED_CERTS_DIR)
     megaCRL_CN, megaCRL_org = buildDict()
-    q = Queue(WORKERS * 16)
-    for i in range(WORKERS):
-        p = Process(target=doWork, args=(i, megaCRL_org, megaCRL_CN, ))
-        p.start()
-    try:
-        ctr = 0
-        for cert in open(CERTS_OUTFILE, 'r'):
-            q.put(cert)
-            ctr += 1
-            if(ctr % 10000 == 0):
-                print(str(ctr) + " certificates processed")
-    except KeyboardInterrupt:
-        sys.exit(1)
+
+    ctr = 0
+    for cert_line in open(CERTS_OUTFILE, 'r'):
+        ctr += 1
+        if(ctr % 10000 == 0):
+            print(str(ctr) + " certificates processed")
+        try:
+            cert = json.loads(cert_line)
+            serial = cert['serial_number']
+            issuer = cert['issuer']
+        except:
+            print("Error getting/loading/parsing %s" % cert)
+            continue  # skip to next certificate
+        org = 'unknown'
+        if 'organization' in issuer:
+            org = issuer['organization']
+        CN = 'unknown'
+        if 'common_name' in issuer:
+            CN = issuer['common_name']
+        if(isRevoked(megaCRL_org, megaCRL_CN, org, CN, serial)):
+            final_revoked_certs_file.write(json.dumps(cert) + '\n')

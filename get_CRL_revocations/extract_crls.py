@@ -41,7 +41,7 @@ for cert in certs_list:
         cn = 'unknown'
 
     cert_for_json = {
-        'serial_number': str(cert.serial_number),
+        'serial_number': int(cert.serial_number),
         'issuer': {
             'organization': org,
             'common_name': cn
