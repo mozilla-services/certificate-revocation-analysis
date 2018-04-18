@@ -1,3 +1,5 @@
 cffi==1.11.4
+cryptography==2.2.2
 ocspbuilder==0.10.2
 oscrypto==0.19.1
+pyOpenSSL==17.5.0
