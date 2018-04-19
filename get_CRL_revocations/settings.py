@@ -1,4 +1,4 @@
-CT_FETCH_DATA_DIR = '/Users/lcrouch/code/mozilla/ct-mapreduce/ct'
+CT_FETCH_DATA_DIR = '/Users/lcrouch/ct'
 CRL_SERVERS_FILENAME = 'CRL_servers.txt'
 CERTS_OUTFILE = 'certs_using_CRL.json'
 ALL_CRLS_DIR = 'all_CRLs'

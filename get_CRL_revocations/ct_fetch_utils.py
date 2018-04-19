@@ -85,6 +85,8 @@ def processPem(path):
                         for name in point.full_name:
                             CRL_distribution_points.update([name.value])
                             counter["Total CRLs Processed"] += 1
+                except x509.extensions.ExtensionNotFound as e:
+                    print("{}:{}\t{}\n".format(path, offset, e))
                 except ValueError as e:
                     print("{}:{}\t{}\n".format(path, offset, e))
                     counter["Certificate Parse Errors"] += 1

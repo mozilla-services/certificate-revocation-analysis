@@ -60,4 +60,7 @@ print(
     (len(CRL_distribution_points), CRL_SERVERS_FILENAME)
 )
 for distribution_point in CRL_distribution_points:
-    crl_outfile.write(distribution_point + '\n')
+    try:
+        crl_outfile.write(distribution_point + '\n')
+    except TypeError as e:
+        print('TypeError writing CRL point to crl_outfile: %s' % e)
