@@ -2,10 +2,12 @@
 import json
 
 from settings import (
-    CERTS_OUTFILE, COMBINED_CRL_OUTFILE, FINAL_REVOKED_CERTS_FILE
+    CERTS_OUTFILE, COMBINED_CRL_OUTFILE,
+    FINAL_NONREVOKED_CERTS_FILE, FINAL_REVOKED_CERTS_FILE
 )
 
 final_revoked_certs_file = open(FINAL_REVOKED_CERTS_FILE, 'w')
+final_nonrevoked_certs_file = open(FINAL_NONREVOKED_CERTS_FILE, 'w')
 
 
 def isRevoked(megaCRL_org, megaCRL_CN, org, CN, serial):
@@ -67,3 +69,5 @@ if __name__ == '__main__':
             CN = issuer['common_name']
         if(isRevoked(megaCRL_org, megaCRL_CN, org, CN, serial)):
             final_revoked_certs_file.write(json.dumps(cert) + '\n')
+        else:
+            final_nonrevoked_certs_file.write(json.dumps(cert) + '\n')

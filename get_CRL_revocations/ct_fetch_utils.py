@@ -55,6 +55,7 @@ def processPem(path):
         counter["Total PEM Files Processed"] += 1
         pem_buffer = ""
         buffer_len = 0
+        cert_offset = 1
         offset = 0
 
         for line in pemFd:
@@ -78,22 +79,29 @@ def processPem(path):
                         der_data, default_backend()
                     )
                     certs_list.append(cert)
-                    crl_points = cert.extensions.get_extension_for_class(
-                        x509.CRLDistributionPoints
-                    )
-                    for point in crl_points.value:
-                        for name in point.full_name:
-                            CRL_distribution_points.update([name.value])
-                            counter["Total CRLs Processed"] += 1
-                except x509.extensions.ExtensionNotFound as e:
-                    print("{}:{}\t{}\n".format(path, offset, e))
+                    try:
+                        crl_points = cert.extensions.get_extension_for_class(
+                            x509.CRLDistributionPoints
+                        )
+                        for point in crl_points.value:
+                            if point.full_name:
+                                for uri in point.full_name:
+                                    CRL_distribution_points.update([uri.value])
+                                    counter["Total CRLs Processed"] += 1
+                            if point.crl_issuer:
+                                for uri in point.crl_issuer:
+                                    CRL_distribution_points.update([uri.value])
+                                    counter["Total CRLs Processed"] += 1
+                    except x509.extensions.ExtensionNotFound as e:
+                        counter["Certificates without CRL"] += 1
                 except ValueError as e:
-                    print("{}:{}\t{}\n".format(path, offset, e))
+                    #print("{}:{}\t{}\n".format(path, cert_offset, e))
                     counter["Certificate Parse Errors"] += 1
                 counter["Total Certificates Processed"] += 1
 
                 # clear the buffer
                 pem_buffer = ""
+                cert_offset += 1
                 offset += buffer_len
                 buffer_len = 0
                 continue
@@ -171,11 +179,13 @@ def processFolder(path):
                 file_queue.append(os.path.join(root, file))
 
     for file_path in file_queue:
+        counter["Files Processed"] += 1
         if file_path.endswith("cer"):
             processCer(file_path)
         elif file_path.endswith("pem"):
             processPem(file_path)
         else:
+            counter["Unknown file type"] += 1
             raise Exception("Unknown type " + file_path)
 
     # print("Folder {} complete".format(path))
@@ -194,6 +204,8 @@ def processCTData(path):
 
         # Is this expired (check by looking the path so we don't have to
         # continue to load)
+        # TODO: can we ignore expired certs when generating the bloom filter?
+        # TODO: what about deltas?
         pathdate = datetime.strptime(item, "%Y-%m-%d").timetuple()
         now = time.gmtime()
         expired_by_year = pathdate.tm_year < now.tm_year
@@ -207,5 +219,6 @@ def processCTData(path):
         processFolder(entry)
         counter["Folders Up-to-date"] += 1
 
-    print("All done. Process results: {}".format(counter))
+    print (counter.most_common(20))
+    #print("All done. Process results: {}".format(counter))
     return certs_list, CRL_distribution_points
