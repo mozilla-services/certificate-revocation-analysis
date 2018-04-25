@@ -6,8 +6,8 @@ from settings import (
     FINAL_NONREVOKED_CERTS_FILE, FINAL_REVOKED_CERTS_FILE
 )
 
-final_revoked_certs_file = open(FINAL_REVOKED_CERTS_FILE, 'w')
-final_nonrevoked_certs_file = open(FINAL_NONREVOKED_CERTS_FILE, 'w')
+final_revoked_certs_file = open(FINAL_REVOKED_CERTS_FILE, 'w', 1)
+final_nonrevoked_certs_file = open(FINAL_NONREVOKED_CERTS_FILE, 'w', 1)
 
 
 def isRevoked(megaCRL_org, megaCRL_CN, org, CN, serial):
@@ -67,7 +67,10 @@ if __name__ == '__main__':
         CN = 'unknown'
         if 'common_name' in issuer:
             CN = issuer['common_name']
-        if(isRevoked(megaCRL_org, megaCRL_CN, org, CN, serial)):
+        if (
+            (org in megaCRL_org and serial in megaCRL_org[org]) or
+            (CN in megaCRL_CN and serial in megaCRL_CN[CN])
+        ):
             final_revoked_certs_file.write(json.dumps(cert) + '\n')
         else:
             final_nonrevoked_certs_file.write(json.dumps(cert) + '\n')

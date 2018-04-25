@@ -3,6 +3,7 @@ import base64
 import binascii
 from collections import Counter
 from datetime import datetime
+import json
 import os
 import time
 
@@ -11,8 +12,11 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 
+CERTS_INDICATOR = 10000
+CRLS_INDICATOR = 1000
+
 counter = Counter()
-CRL_distribution_points = set()
+CRL_distribution_points = []
 certs_list = []
 
 
@@ -45,7 +49,7 @@ def processCer(file_path):
         counter["Certificate Parse Errors"] += 1
 
 
-def processPem(path):
+def processPem(path, crl_outfile, certs_outfile):
     """
     This method processes a PEM file which may contain one or more
     PEM-formatted certificates.
@@ -78,26 +82,72 @@ def processPem(path):
                     cert = x509.load_der_x509_certificate(
                         der_data, default_backend()
                     )
-                    certs_list.append(cert)
+                    try:
+                        org = cert.issuer.get_attributes_for_oid(
+                            x509.oid.NameOID.ORGANIZATION_NAME
+                        )[0].value.replace(" ", "_")
+                    except:
+                        counter["Unknown orgs"] += 1
+                        org = "unknown"
+                    try:
+                        cn = cert.issuer.get_attributes_for_oid(
+                            x509.oid.NameOID.COMMON_NAME
+                        )[0].value.replace(" ", "_")
+                    except:
+                        counter["Unknown CN"] += 1
+                        cn = "unknown"
+
+                    cert_for_json = {
+                        'serial_number': int(cert.serial_number),
+                        'issuer': {
+                            'organization': org,
+                            'common_name': cn
+                        }
+                    }
+
+                    try:
+                        certs_outfile.write(json.dumps(cert_for_json) + '\n')
+                    except TypeError:
+                        # TODO: handle errors?
+                        counter["Cert writing errors"] += 1
+
                     try:
                         crl_points = cert.extensions.get_extension_for_class(
                             x509.CRLDistributionPoints
                         )
                         for point in crl_points.value:
                             if point.full_name:
-                                for uri in point.full_name:
-                                    CRL_distribution_points.update([uri.value])
+                                for name in point.full_name:
+                                    if type(name) == x509.general_name.UniformResourceIdentifier:
+                                        uri_str = str(name.value)
+                                        if uri_str not in CRL_distribution_points:
+                                            CRL_distribution_points.append(uri_str)
+                                            crl_outfile.write(uri_str + '\n')
+                                            counter["CRLs written"] += 1
                                     counter["Total CRLs Processed"] += 1
                             if point.crl_issuer:
-                                for uri in point.crl_issuer:
-                                    CRL_distribution_points.update([uri.value])
+                                for issuer in point.crl_issuer:
+                                    if type(issuer) == x509.general_name.UniformResourceIdentifier:
+                                        uri_str = str(issuer.value)
+                                        if uri_str not in CRL_distribution_points:
+                                            CRL_distribution_points.append(uri_str)
+                                            crl_outfile.write(uri_str + '\n')
+                                            counter["CRLs written"] += 1
                                     counter["Total CRLs Processed"] += 1
+                            if not(
+                                counter["Total CRLs Processed"] % CRLS_INDICATOR
+                            ):
+                                print("Processing results: {}".format(counter))
                     except x509.extensions.ExtensionNotFound as e:
                         counter["Certificates without CRL"] += 1
                 except ValueError as e:
-                    #print("{}:{}\t{}\n".format(path, cert_offset, e))
+                    # print("{}:{}\t{}\n".format(path, cert_offset, e))
                     counter["Certificate Parse Errors"] += 1
                 counter["Total Certificates Processed"] += 1
+                if not(
+                    counter["Total Certificates Processed"] % CERTS_INDICATOR
+                ):
+                    print("Processing results: {}".format(counter))
 
                 # clear the buffer
                 pem_buffer = ""
@@ -168,7 +218,7 @@ def getMetadataForCert(aCert):
     return metaData
 
 
-def processFolder(path):
+def processFolder(path, crl_outfile, certs_outfile):
     file_queue = []
 
     # print("Folder {} processing".format(path))
@@ -180,25 +230,29 @@ def processFolder(path):
 
     for file_path in file_queue:
         counter["Files Processed"] += 1
+        if os.path.getsize(file_path) > 100000000:
+            counter["Files larger than 1MB"] += 1
+            continue
+
         if file_path.endswith("cer"):
-            processCer(file_path)
+            processCer(file_path, crl_outfile, certs_outfile)
         elif file_path.endswith("pem"):
-            processPem(file_path)
+            processPem(file_path, crl_outfile, certs_outfile)
         else:
             counter["Unknown file type"] += 1
-            raise Exception("Unknown type " + file_path)
+            continue
 
     # print("Folder {} complete".format(path))
 
     counter["Folders Processed"] += 1
 
 
-def processCTData(path):
-    for item in os.listdir(path):
+def processCTData(ct_data_path, crl_outfile, certs_outfile):
+    for item in os.listdir(ct_data_path):
         if item == "state":
             continue
 
-        entry = os.path.join(path, item)
+        entry = os.path.join(ct_data_path, item)
         if not os.path.isdir(entry):
             continue
 
@@ -216,9 +270,7 @@ def processCTData(path):
             counter["Folders Expired"] += 1
             continue
 
-        processFolder(entry)
+        processFolder(entry, crl_outfile, certs_outfile)
         counter["Folders Up-to-date"] += 1
 
-    print (counter.most_common(20))
-    #print("All done. Process results: {}".format(counter))
-    return certs_list, CRL_distribution_points
+    print("All done. Process results: {}".format(counter))
