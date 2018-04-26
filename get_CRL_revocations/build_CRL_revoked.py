@@ -56,8 +56,10 @@ if __name__ == '__main__':
             print(str(ctr) + " certificates processed")
         try:
             cert = json.loads(cert_line)
-            serial = cert['serial_number']
             issuer = cert['issuer']
+            serial = cert['serial_number']
+            subject = cert['subject']
+            public_key = cert['public_key_bytes']
         except:
             print("Error getting/loading/parsing %s" % cert)
             continue  # skip to next certificate

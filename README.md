@@ -37,6 +37,7 @@ below creates an output that feeds into the next step.
 7. `python build_CRL_revoked.py` parses `certs_using_crl.json` and puts any
    cert found in `megaCRL.json` into
    * `final_CRL_revoked.json` file
+   * `final_CRL_nonrevoked.json` file
 
 ### Part C: Building The Filter
 See https://github.com/mozilla-services/shavar-list-creation/pull/53

@@ -10,6 +10,7 @@ import time
 # 3rd-party libraries
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 
 
 CERTS_INDICATOR = 10000
@@ -82,27 +83,51 @@ def processPem(path, crl_outfile, certs_outfile):
                     cert = x509.load_der_x509_certificate(
                         der_data, default_backend()
                     )
+                    # get the issuing org for CRL checking
                     try:
                         org = cert.issuer.get_attributes_for_oid(
                             x509.oid.NameOID.ORGANIZATION_NAME
                         )[0].value.replace(" ", "_")
                     except:
-                        counter["Unknown orgs"] += 1
-                        org = "unknown"
+                        counter["Unknown issuer orgs"] += 1
+                        org = 'unknown'
+
+                    # get the issuing CN for CRL checking
                     try:
-                        cn = cert.issuer.get_attributes_for_oid(
+                        issuer_cn = cert.issuer.get_attributes_for_oid(
                             x509.oid.NameOID.COMMON_NAME
                         )[0].value.replace(" ", "_")
                     except:
-                        counter["Unknown CN"] += 1
-                        cn = "unknown"
+                        counter["Unknown issuer CN"] += 1
+                        issuer_cn = 'unknown'
+
+                    # get the subject common name
+                    try:
+                        subject_CN = cert.subject.get_attributes_for_oid(
+                            x509.oid.NameOID.COMMON_NAME
+                        )[0].value
+                    except:
+                        counter["Unknown subject CN"] += 1
+                        subject_CN = "unknown"
+
+                    # get the public key bytes
+                    try:
+                        public_key_bytes = cert.public_key().public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo
+                        )
+                    except:
+                        counter["Unknown public key bytes"] += 1
+                        public_key_bytes = "unknown"
 
                     cert_for_json = {
                         'serial_number': int(cert.serial_number),
                         'issuer': {
                             'organization': org,
-                            'common_name': cn
-                        }
+                            'common_name': issuer_cn
+                        },
+                        'subject': subject_CN,
+                        'public_key_bytes': str(public_key_bytes)
                     }
 
                     try:
@@ -231,6 +256,7 @@ def processFolder(path, crl_outfile, certs_outfile):
     for file_path in file_queue:
         counter["Files Processed"] += 1
         if os.path.getsize(file_path) > 100000000:
+            # TODO: remove this skip
             counter["Files larger than 1MB"] += 1
             continue
 
